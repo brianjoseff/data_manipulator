@@ -31,6 +31,7 @@ interface VariableListProps {
 interface DropZoneProps {
   onDrop: (files: File[]) => void;
   label: string;
+  loadedFileName?: string;
 }
 
 interface CSVRow {
@@ -206,7 +207,7 @@ const VariableList: React.FC<VariableListProps> = memo(({
 
 VariableList.displayName = 'VariableList';
 
-const DropZone = memo(({ onDrop, label }: DropZoneProps) => {
+const DropZone = memo(({ onDrop, label, loadedFileName }: DropZoneProps) => {
   const { getRootProps, getInputProps, isDragActive } = useDropzone({
     onDrop,
     accept: {
@@ -218,13 +219,19 @@ const DropZone = memo(({ onDrop, label }: DropZoneProps) => {
   return (
     <div
       {...getRootProps()}
-      className={`dropzone ${isDragActive ? 'dropzone--active' : ''}`}
+      className={`dropzone ${isDragActive ? 'dropzone--active' : ''} ${loadedFileName ? 'dropzone--has-file' : ''}`}
     >
       <input {...getInputProps()} />
       <p className="dropzone__label">{label}</p>
-      <p className="dropzone__hint">
-        {isDragActive ? 'Drop the file here' : 'Drag & Drop or Click to Upload'}
-      </p>
+      {loadedFileName ? (
+        <p className="dropzone__file-name" title={loadedFileName}>
+          {loadedFileName}
+        </p>
+      ) : (
+        <p className="dropzone__hint">
+          {isDragActive ? 'Drop the file here' : 'Drag & Drop or Click to Upload'}
+        </p>
+      )}
     </div>
   );
 });
@@ -256,6 +263,7 @@ const MergeTool: React.FC = () => {
   const [pairs, setPairs] = useState<VariablePair[]>([]);
   const [selected, setSelected] = useState<{ db1?: string; db2?: string }>({});
   const [isLoading, setIsLoading] = useState(true);
+  const [loadedFiles, setLoadedFiles] = useState<{ db1?: string; db2?: string }>({});
 
   // Load stored data on component mount
   useEffect(() => {
@@ -309,7 +317,7 @@ const MergeTool: React.FC = () => {
     return acc;
   }, new Map<string, string>());
 
-  const processCSV = useCallback((file: File, setDb: React.Dispatch<React.SetStateAction<Variable[]>>) => {
+  const processCSV = useCallback((file: File, setDb: React.Dispatch<React.SetStateAction<Variable[]>>, dbKey: 'db1' | 'db2') => {
     const reader = new FileReader();
     reader.onload = ({ target }) => {
       const csv = target?.result;
@@ -325,6 +333,7 @@ const MergeTool: React.FC = () => {
             formName: row['Form Name'] || row['form_name'] || '',
           }));
         setDb(data);
+        setLoadedFiles(prev => ({ ...prev, [dbKey]: file.name }));
       }
     };
     reader.readAsText(file);
@@ -399,8 +408,9 @@ const MergeTool: React.FC = () => {
           <div className="merger-tool__database">
             <h2 className="merger-tool__database-title">Database Dictionary #1</h2>
             <DropZone
-              onDrop={files => processCSV(files[0], setDb1)}
+              onDrop={files => processCSV(files[0], setDb1, 'db1')}
               label="Drop Database 1 CSV"
+              loadedFileName={loadedFiles.db1}
             />
             <VariableList
               title="Variables"
@@ -415,8 +425,9 @@ const MergeTool: React.FC = () => {
           <div className="merger-tool__database">
             <h2 className="merger-tool__database-title">Database Dictionary #2</h2>
             <DropZone
-              onDrop={files => processCSV(files[0], setDb2)}
+              onDrop={files => processCSV(files[0], setDb2, 'db2')}
               label="Drop Database 2 CSV"
+              loadedFileName={loadedFiles.db2}
             />
             <VariableList
               title="Variables"
