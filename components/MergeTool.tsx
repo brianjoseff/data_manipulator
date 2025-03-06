@@ -55,6 +55,24 @@ interface AutoSizerProps {
   width: number;
 }
 
+const generateFormColor = (formName: string): { bg: string; text: string } => {
+  // Generate a hash of the form name
+  let hash = 0;
+  for (let i = 0; i < formName.length; i++) {
+    hash = formName.charCodeAt(i) + ((hash << 5) - hash);
+  }
+  
+  // Use the hash to generate HSL values
+  // We'll use a fixed saturation and lightness for better readability
+  const hue = Math.abs(hash % 360);
+  
+  // Generate a pastel color with good contrast
+  return {
+    bg: `hsl(${hue}, 85%, 95%)`,
+    text: `hsl(${hue}, 70%, 25%)`
+  };
+};
+
 const VariableItem = memo(({ 
   data: { 
     item,
@@ -78,6 +96,8 @@ const VariableItem = memo(({
     isPaired ? 'variable-list__item--paired' : ''
   ].filter(Boolean).join(' ');
 
+  const formColors = item.formName ? generateFormColor(item.formName) : null;
+
   return (
     <div
       onClick={() => !isPaired && onSelect(item.name)}
@@ -87,7 +107,13 @@ const VariableItem = memo(({
         <div className="variable-list__item-name">
           {item.name}
           {item.formName && (
-            <span className="variable-list__item-form-name">
+            <span 
+              className="variable-list__item-form-name"
+              style={formColors ? {
+                backgroundColor: formColors.bg,
+                color: formColors.text
+              } : undefined}
+            >
               {item.formName}
             </span>
           )}
@@ -238,6 +264,41 @@ const DropZone = memo(({ onDrop, label, loadedFileName }: DropZoneProps) => {
 
 DropZone.displayName = 'DropZone';
 
+// Add after DropZone component and before VariableList component
+const FormNames = memo(({ formNames }: { formNames: string[] }) => {
+  if (formNames.length === 0) return null;
+
+  return (
+    <div className="form-names">
+      <div className="form-names__header">
+        <h3 className="form-names__header-title">Forms</h3>
+        <span className="form-names__header-count">
+          {formNames.length} form{formNames.length !== 1 ? 's' : ''}
+        </span>
+      </div>
+      <div className="form-names__list">
+        {formNames.map((formName, idx) => {
+          const colors = generateFormColor(formName);
+          return (
+            <span
+              key={idx}
+              className="form-names__item"
+              style={{
+                backgroundColor: colors.bg,
+                color: colors.text
+              }}
+            >
+              {formName}
+            </span>
+          );
+        })}
+      </div>
+    </div>
+  );
+});
+
+FormNames.displayName = 'FormNames';
+
 // Add before MergeTool component
 const DB_NAME = 'redcap-merger';
 const STORE_NAME = 'merger-data';
@@ -247,6 +308,7 @@ interface StoredData {
   db1: Variable[];
   db2: Variable[];
   pairs: VariablePair[];
+  loadedFiles: { db1?: string; db2?: string };
 }
 
 const initializeDB = async () => {
@@ -276,6 +338,7 @@ const MergeTool: React.FC = () => {
           setDb1(data.db1);
           setDb2(data.db2);
           setPairs(data.pairs);
+          setLoadedFiles(data.loadedFiles || {});
         }
       } catch (error) {
         console.error('Error loading stored data:', error);
@@ -298,6 +361,7 @@ const MergeTool: React.FC = () => {
           db1,
           db2,
           pairs,
+          loadedFiles,
         }, DATA_KEY);
       } catch (error) {
         console.error('Error saving data:', error);
@@ -305,7 +369,7 @@ const MergeTool: React.FC = () => {
     };
 
     saveData();
-  }, [db1, db2, pairs, isLoading]);
+  }, [db1, db2, pairs, loadedFiles, isLoading]);
 
   const pairedVariablesDb1 = new Set(pairs.map(p => p.db1));
   const pairedVariablesDb2 = new Set(pairs.map(p => p.db2));
@@ -412,6 +476,7 @@ const MergeTool: React.FC = () => {
               label="Drop Database 1 CSV"
               loadedFileName={loadedFiles.db1}
             />
+            <FormNames formNames={[...new Set(db1.map(v => v.formName).filter((name): name is string => !!name))]} />
             <VariableList
               title="Variables"
               data={db1}
@@ -429,6 +494,7 @@ const MergeTool: React.FC = () => {
               label="Drop Database 2 CSV"
               loadedFileName={loadedFiles.db2}
             />
+            <FormNames formNames={[...new Set(db2.map(v => v.formName).filter((name): name is string => !!name))]} />
             <VariableList
               title="Variables"
               data={db2}
